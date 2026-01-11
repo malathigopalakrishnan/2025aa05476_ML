@@ -1,1 +1,7 @@
-The problem describes the early detection of diabetes in patients. It is a classification problem.
+streamlit
+scikit-learn
+pandas
+numpy
+matplotlib
+seaborn
+xgboost
