@@ -49,7 +49,7 @@ def make_preprocessor(numeric_cols, categorical_cols):
     ])
     cat_pipe = Pipeline(steps=[
         ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("ohe", OneHotEncoder(handle_unknown="ignore", sparse=False))
+        ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False))
     ])
     preprocessor = ColumnTransformer(
         transformers=[
@@ -197,3 +197,4 @@ if uploaded:
         )
 else:
     st.info("Upload a CSV to begin. Use test data if your dataset is large (Streamlit free tier has limits).")
+
