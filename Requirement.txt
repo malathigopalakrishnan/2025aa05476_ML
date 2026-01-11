@@ -1,0 +1,1 @@
+The problem describes the early detection of diabetes in patients. It is a classification problem.
