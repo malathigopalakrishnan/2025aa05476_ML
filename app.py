@@ -116,7 +116,8 @@ if uploaded:
     st.dataframe(df.head())
 
     # Target selection
-    target_col = st.selectbox("Select target column", options=df.columns.tolist())
+  
+    target_col = st.selectbox("Select target column", options=df.columns.tolist(),index=len(df.columns) - 1)
     if target_col:
         y_raw = df[target_col]
         X = df.drop(columns=[target_col])
@@ -197,4 +198,5 @@ if uploaded:
         )
 else:
     st.info("Upload a CSV to begin. Use test data if your dataset is large (Streamlit free tier has limits).")
+
 
