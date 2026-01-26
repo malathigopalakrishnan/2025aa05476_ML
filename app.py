@@ -1,194 +1,199 @@
-import json
-from pathlib import Path
+
+
+# app.py
+import io
 import numpy as np
 import pandas as pd
-import joblib
-
 import streamlit as st
-from sklearn.metrics import (
-    accuracy_score, roc_auc_score, precision_score, recall_score, f1_score,
-    matthews_corrcoef, confusion_matrix, classification_report
-)
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-st.set_page_config(page_title="Diabetes Prediction - ML Assignment 2", layout="wide")
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import (accuracy_score, precision_score, recall_score,
+                             f1_score, matthews_corrcoef, roc_auc_score,
+                             classification_report, confusion_matrix)
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
 
-MODEL_DIR = Path("model")
-RESULTS_DIR = Path("results")
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import RandomForestClassifier
 
-@st.cache_resource
-def load_assets():
-    # Load metadata
-    meta_path = MODEL_DIR / "metadata.json"
-    if not meta_path.exists():
-        raise FileNotFoundError("metadata.json not found. Run the training notebook first to create model/ artifacts.")
-    metadata = json.loads(meta_path.read_text(encoding="utf-8"))
-
-    # Load metrics (optional)
-    metrics_path = RESULTS_DIR / "metrics.csv"
-    metrics_df = None
-    if metrics_path.exists():
-        metrics_df = pd.read_csv(metrics_path)
-
-    # Load all joblib models
-    models = {}
-    for p in MODEL_DIR.glob("*.joblib"):
-        # Make a nicer name from filename
-        pretty = p.stem.replace('_', ' ').title()
-        models[pretty] = joblib.load(p)
-
-    return metadata, metrics_df, models
-
-
-def clean_columns(cols):
-    out = []
-    for c in cols:
-        c2 = str(c).strip().replace(' ', '_').replace('-', '_')
-        out.append(c2)
-    return out
-
-
-def preprocess_dataframe(df_in: pd.DataFrame, feature_order):
-    """Apply the same preprocessing used during training."""
-    dfp = df_in.copy()
-    dfp.columns = clean_columns(dfp.columns)
-
-    # Map Gender
-    if 'Gender' in dfp.columns:
-        dfp['Gender'] = dfp['Gender'].map({'Male': 1, 'Female': 0, 'male': 1, 'female': 0})
-
-    # Map Yes/No
-    yn_map = {'Yes': 1, 'No': 0, 'yes': 1, 'no': 0, True: 1, False: 0}
-    for c in dfp.columns:
-        if c == 'class':
-            continue
-        if dfp[c].dtype == 'object':
-            uniq = set(dfp[c].dropna().unique().tolist())
-            if uniq.issubset(set(['Yes','No','yes','no'])):
-                dfp[c] = dfp[c].map(yn_map)
-
-    # Age numeric
-    if 'Age' in dfp.columns:
-        dfp['Age'] = pd.to_numeric(dfp['Age'], errors='coerce')
-
-    # Ensure all expected feature columns exist
-    missing = [c for c in feature_order if c not in dfp.columns]
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}")
-
-    X = dfp[feature_order].copy()
-    X = X.dropna()
-    return X
-
-
-def safe_auc(y_true, y_score):
-    try:
-        return roc_auc_score(y_true, y_score)
-    except Exception:
-        return np.nan
-
-
-st.title("🩺 Diabetes Classification — ML Assignment 2")
-st.caption("Upload a CSV (preferably test data). Select a model and view predictions + metrics.")
-
+# Optional: XGBoost
+XGB_AVAILABLE = True
 try:
-    metadata, metrics_df, models = load_assets()
-except Exception as e:
-    st.error(str(e))
-    st.stop()
+    from xgboost import XGBClassifier
+except Exception:
+    XGB_AVAILABLE = False
 
-feature_order = metadata['feature_order']
+RSEED = 42
 
-with st.expander("📌 Assignment-required metrics table (from local hold-out test)", expanded=True):
-    if metrics_df is not None:
-        st.dataframe(metrics_df, use_container_width=True)
-    else:
-        st.info("metrics.csv not found. Run the training notebook to generate results/metrics.csv")
+st.set_page_config(page_title="ML Assignment - Streamlit App", layout="wide")
 
-st.subheader("1) Upload CSV")
-file = st.file_uploader("Upload your CSV file", type=['csv'])
+# -----------------------------
+# Helper functions
+# -----------------------------
+def detect_feature_types(X: pd.DataFrame):
+    numeric_cols = X.select_dtypes(include=["number"]).columns.tolist()
+    categorical_cols = X.select_dtypes(exclude=["number"]).columns.tolist()
+    return numeric_cols, categorical_cols
 
-st.subheader("2) Choose a Model")
-model_name = st.selectbox("Select model", options=sorted(models.keys()))
-model = models[model_name]
-
-if file is None:
-    st.warning("Please upload a CSV to continue.")
-    st.stop()
-
-# Load uploaded CSV
-raw_df = pd.read_csv(file)
-raw_df.columns = clean_columns(raw_df.columns)
-
-# Detect if label column exists
-has_label = 'class' in raw_df.columns
-
-try:
-    X = preprocess_dataframe(raw_df, feature_order)
-except Exception as e:
-    st.error(f"Preprocessing error: {e}")
-    st.stop()
-
-# Align y to X (after dropna)
-if has_label:
-    y_raw = raw_df.loc[X.index, 'class']
-    y_true = y_raw.map({'Positive': 1, 'Negative': 0, 'positive': 1, 'negative': 0}).astype('float')
-    # If any unmapped labels -> drop
-    valid_idx = y_true.dropna().index
-    X = X.loc[valid_idx]
-    y_true = y_true.loc[valid_idx].astype(int)
-
-# Predict
-pred = model.predict(X)
-proba = None
-if hasattr(model, 'predict_proba'):
-    proba = model.predict_proba(X)[:, 1]
-
-pred_label = np.where(pred == 1, 'Positive', 'Negative')
-
-# Output predictions
-out = X.copy()
-out['predicted_class'] = pred_label
-if proba is not None:
-    out['prob_positive'] = proba
-
-st.subheader("3) Predictions")
-st.dataframe(out.head(50), use_container_width=True)
-
-st.download_button(
-    label="⬇️ Download predictions CSV",
-    data=out.to_csv(index=False).encode('utf-8'),
-    file_name="predictions.csv",
-    mime="text/csv"
-)
-
-# If labels exist, compute metrics
-if has_label and len(y_true) > 0:
-    st.subheader("4) Evaluation on uploaded data")
-
-    auc = safe_auc(y_true, proba) if proba is not None else np.nan
-    metrics = {
-        'Accuracy': accuracy_score(y_true, pred),
-        'AUC': auc,
-        'Precision': precision_score(y_true, pred, zero_division=0),
-        'Recall': recall_score(y_true, pred, zero_division=0),
-        'F1': f1_score(y_true, pred, zero_division=0),
-        'MCC': matthews_corrcoef(y_true, pred)
-    }
-
-    c1, c2, c3 = st.columns(3)
-    items = list(metrics.items())
-    for i, (k, v) in enumerate(items):
-        col = [c1, c2, c3][i % 3]
-        col.metric(k, f"{v:.4f}" if isinstance(v, float) else str(v))
-
-    cm = confusion_matrix(y_true, pred)
-    st.write("**Confusion Matrix**")
-    st.dataframe(
-        pd.DataFrame(cm, index=['True_Neg', 'True_Pos'], columns=['Pred_Neg', 'Pred_Pos']),
-        use_container_width=True
+def make_preprocessor(numeric_cols, categorical_cols):
+    num_pipe = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler())
+    ])
+    cat_pipe = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("ohe", OneHotEncoder(handle_unknown="ignore", sparse=False))
+    ])
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", num_pipe, numeric_cols),
+            ("cat", cat_pipe, categorical_cols)
+        ],
+        remainder="drop",
+        verbose_feature_names_out=False
     )
+    return preprocessor
 
-    st.write("**Classification Report**")
-    st.code(classification_report(y_true, pred, target_names=['Negative', 'Positive']))
+def prepare_models(n_classes):
+    models = {
+        "Logistic Regression": LogisticRegression(max_iter=1000, random_state=RSEED),
+        "Decision Tree": DecisionTreeClassifier(random_state=RSEED),
+        "kNN": KNeighborsClassifier(n_neighbors=5),
+        "Naive Bayes (Gaussian)": GaussianNB(),
+        "Random Forest (Ensemble)": RandomForestClassifier(n_estimators=300, random_state=RSEED),
+    }
+    if XGB_AVAILABLE:
+        objective = "binary:logistic" if n_classes == 2 else "multi:softprob"
+        extra = {} if n_classes == 2 else {"num_class": n_classes}
+        models["XGBoost (Ensemble)"] = XGBClassifier(
+            n_estimators=200, max_depth=6, learning_rate=0.1,
+            subsample=0.8, colsample_bytree=0.8,
+            objective=objective, eval_metric="logloss",
+            random_state=RSEED, n_jobs=-1, tree_method="hist", **extra
+        )
+    return models
+
+def compute_metrics(y_true_enc, y_pred_enc, y_proba, n_classes):
+    metrics = {}
+    metrics["Accuracy"] = accuracy_score(y_true_enc, y_pred_enc)
+
+    if n_classes == 2:
+        metrics["Precision"] = precision_score(y_true_enc, y_pred_enc, average="binary", zero_division=0)
+        metrics["Recall"] = recall_score(y_true_enc, y_pred_enc, average="binary", zero_division=0)
+        metrics["F1"] = f1_score(y_true_enc, y_pred_enc, average="binary", zero_division=0)
+        metrics["AUC"] = roc_auc_score(y_true_enc, y_proba[:, 1]) if (y_proba is not None and y_proba.shape[1] >= 2) else np.nan
+    else:
+        metrics["Precision"] = precision_score(y_true_enc, y_pred_enc, average="macro", zero_division=0)
+        metrics["Recall"] = recall_score(y_true_enc, y_pred_enc, average="macro", zero_division=0)
+        metrics["F1"] = f1_score(y_true_enc, y_pred_enc, average="macro", zero_division=0)
+        metrics["AUC"] = roc_auc_score(y_true_enc, y_proba, multi_class="ovr", average="macro") if (y_proba is not None and y_proba.shape[1] == n_classes) else np.nan
+
+    metrics["MCC"] = matthews_corrcoef(y_true_enc, y_pred_enc)
+    return metrics
+
+def format_metrics(metrics):
+    return {k: (round(v, 4) if isinstance(v, (float, np.floating)) else v) for k, v in metrics.items()}
+
+# -----------------------------
+# Sidebar: Upload & Settings
+# -----------------------------
+st.sidebar.title("Configuration")
+
+uploaded = st.sidebar.file_uploader("Upload CSV (test data allowed)", type=["csv"])
+test_size = st.sidebar.slider("Test size", min_value=0.1, max_value=0.4, value=0.2, step=0.05)
+random_state = st.sidebar.number_input("Random seed", min_value=0, value=RSEED, step=1)
+
+if uploaded:
+    df = pd.read_csv(uploaded)
+    st.write("### Preview of uploaded data")
+    st.dataframe(df.head())
+
+    # Target selection
+    target_col = st.selectbox("Select target column", options=df.columns.tolist())
+    if target_col:
+        y_raw = df[target_col]
+        X = df.drop(columns=[target_col])
+
+        # Encode target
+        le = LabelEncoder()
+        y_enc = le.fit_transform(y_raw)
+        class_names = le.classes_
+        n_classes = len(class_names)
+
+        # Train-test split
+        X_train, X_test, y_train_enc, y_test_enc = train_test_split(
+            X, y_enc, test_size=test_size, random_state=random_state, stratify=y_enc
+        )
+
+        # Models and preprocessing
+        models = prepare_models(n_classes)
+        model_name = st.selectbox("Choose a model", options=list(models.keys()))
+        num_cols, cat_cols = detect_feature_types(X)
+        preprocessor = make_preprocessor(num_cols, cat_cols)
+
+        # Build pipeline
+        from sklearn.pipeline import Pipeline
+        pipeline = Pipeline(steps=[("preprocess", preprocessor), ("clf", models[model_name])])
+
+        # Train
+        st.write(f"### Training: {model_name}")
+        pipeline.fit(X_train, y_train_enc)
+
+        # Predict + probabilities
+        y_pred = pipeline.predict(X_test)
+        y_proba = None
+        try:
+            y_proba = pipeline.predict_proba(X_test)
+        except Exception:
+            pass
+
+        # Metrics
+        metrics = compute_metrics(y_test_enc, y_pred, y_proba, n_classes)
+        st.subheader("Evaluation Metrics")
+        st.write(format_metrics(metrics))
+
+        # Classification report
+        st.subheader("Classification Report")
+        report_text = classification_report(
+            y_test_enc, y_pred, target_names=[str(c) for c in class_names], zero_division=0
+        )
+        st.code(report_text, language="text")
+
+        # Confusion matrix
+        st.subheader("Confusion Matrix")
+        cm = confusion_matrix(y_test_enc, y_pred)
+        fig, ax = plt.subplots(figsize=(6, 4))
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
+                    xticklabels=class_names, yticklabels=class_names, ax=ax)
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("True")
+        st.pyplot(fig)
+
+        # Download metrics as CSV (for README table)
+        results_row = {
+            "ML Model Name": model_name,
+            "Accuracy": metrics["Accuracy"],
+            "AUC": metrics["AUC"],
+            "Precision": metrics["Precision"],
+            "Recall": metrics["Recall"],
+            "F1": metrics["F1"],
+            "MCC": metrics["MCC"]
+        }
+        out_df = pd.DataFrame([results_row])
+        csv_buf = io.StringIO()
+        out_df.to_csv(csv_buf, index=False)
+        st.download_button(
+            label="Download this model’s metrics (CSV)",
+            data=csv_buf.getvalue(),
+            file_name=f"{model_name.replace(' ', '_').lower()}_metrics.csv",
+            mime="text/csv"
+        )
 else:
-    st.info("No ground-truth label column `class` found in uploaded CSV. Showing predictions only.")
+    st.info("Upload a CSV to begin. Use test data if your dataset is large (Streamlit free tier has limits).")
