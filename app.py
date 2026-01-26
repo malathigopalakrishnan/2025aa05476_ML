@@ -161,8 +161,8 @@ out["predicted_class"] = pred_label
 if proba is not None:
     out["prob_positive"] = proba
 
-st.subheader("3) Predictions")
-st.dataframe(out.head(50), use_container_width=True)
+#st.subheader("3) Predictions")
+#st.dataframe(out.head(50), use_container_width=True)
 
 st.download_button(
     label="⬇️ Download predictions CSV",
@@ -173,7 +173,7 @@ st.download_button(
 
 # ----------------------- METRICS ----------------------------
 if has_label and len(y_true) > 0:
-    st.subheader("4) Evaluation on uploaded data")
+    st.subheader("3) Evaluation on uploaded data")
 
     auc = safe_auc(y_true, proba) if proba is not None else np.nan
 
@@ -211,12 +211,13 @@ if has_label and len(y_true) > 0:
     )
 
     # Classification report
-    st.write("**Classification Report**")
-    st.code(
+    #st.write("**Classification Report**")
+    '''st.code(
         classification_report(
             y_true, pred, target_names=["Negative", "Positive"]
         )
-    )
+    )'''
 
 else:
     st.info("No ground-truth label column `class` found in uploaded CSV. Showing predictions only.")
+
