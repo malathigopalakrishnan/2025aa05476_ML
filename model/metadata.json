@@ -1,0 +1,34 @@
+{
+  "feature_order": [
+    "Age",
+    "Gender",
+    "Polyuria",
+    "Polydipsia",
+    "sudden_weight_loss",
+    "weakness",
+    "Polyphagia",
+    "Genital_thrush",
+    "visual_blurring",
+    "Itching",
+    "Irritability",
+    "delayed_healing",
+    "partial_paresis",
+    "muscle_stiffness",
+    "Alopecia",
+    "Obesity"
+  ],
+  "target_col": "class",
+  "target_mapping": {
+    "Positive": 1,
+    "Negative": 0
+  },
+  "gender_mapping": {
+    "Male": 1,
+    "Female": 0
+  },
+  "yes_no_mapping": {
+    "Yes": 1,
+    "No": 0
+  },
+  "notes": "Preprocessing: spaces->underscores; Gender and Yes/No mapped to 0/1; drop NA rows."
+}
