@@ -139,8 +139,8 @@ if st.button("⬇️ Download diabetes_data_upload.csv"):
 # ---------------------------------------------------------
 # UPLOAD CSV OR USE DOWNLOADED FILE
 # ---------------------------------------------------------
-st.subheader("1) Upload CSV")
-file = st.file_uploader("Upload your CSV file", type=["csv"])
+#st.subheader("1) Upload CSV")
+#file = st.file_uploader("Upload your CSV file", type=["csv"])
 
 if file is None:
     local_dataset = "diabetes_data_upload.csv"
@@ -202,8 +202,6 @@ out["predicted_class"] = pred_label
 if proba is not None:
     out["prob_positive"] = proba
 
-st.subheader("3) Predictions Preview")
-st.dataframe(out.head(50), use_container_width=True)
 
 st.download_button(
     label="⬇️ Download predictions CSV",
@@ -250,12 +248,7 @@ if has_label and len(y_true) > 0:
         use_container_width=True
     )
 
-    st.write("**Classification Report**")
-    st.code(
-        classification_report(
-            y_true, pred, target_names=["Negative", "Positive"]
-        )
-    )
 
 else:
     st.info("Labels not found. Predictions only.")
+
