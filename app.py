@@ -190,5 +190,15 @@ if has_label and len(y_true) > 0:
 
     st.write("**Classification Report**")
     st.code(classification_report(y_true, pred, target_names=['Negative', 'Positive']))
+    
+#st.subheader("Classification Report (Text)")
+    st.text(classification_report(
+     y_true,
+     pred,
+     target_names=["Negative", "Positive"],
+     zero_division=0
+))
+
 else:
     st.info("No ground-truth label column `class` found in uploaded CSV. Showing predictions only.")
+
