@@ -174,3 +174,49 @@ st.download_button(
 # ----------------------- METRICS ----------------------------
 if has_label and len(y_true) > 0:
     st.subheader("4) Evaluation on uploaded data")
+
+    auc = safe_auc(y_true, proba) if proba is not None else np.nan
+
+    metrics = {
+        "Accuracy": accuracy_score(y_true, pred),
+        "AUC": auc,
+        "Precision": precision_score(y_true, pred, zero_division=0),
+        "Recall": recall_score(y_true, pred, zero_division=0),
+        "F1": f1_score(y_true, pred, zero_division=0),
+        "MCC": matthews_corrcoef(y_true, pred),
+    }
+
+    # --- FORMATTED METRICS TABLE (NEW) ---
+    st.subheader("📊 Metrics Summary")
+
+    metrics_df_display = (
+        pd.DataFrame(metrics.items(), columns=["Metric", "Value"])
+        .assign(Value=lambda df: df["Value"].apply(
+            lambda x: f"{x:.4f}" if isinstance(x, float) else x
+        ))
+    )
+
+    st.dataframe(metrics_df_display, use_container_width=True)
+
+    # Confusion Matrix
+    cm = confusion_matrix(y_true, pred)
+    st.write("**Confusion Matrix**")
+    st.dataframe(
+        pd.DataFrame(
+            cm,
+            index=["True_Neg", "True_Pos"],
+            columns=["Pred_Neg", "Pred_Pos"]
+        ),
+        use_container_width=True
+    )
+
+    # Classification report
+    st.write("**Classification Report**")
+    st.code(
+        classification_report(
+            y_true, pred, target_names=["Negative", "Positive"]
+        )
+    )
+
+else:
+    st.info("No ground-truth label column `class` found in uploaded CSV. Showing predictions only.")
