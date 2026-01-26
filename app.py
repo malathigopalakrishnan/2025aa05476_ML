@@ -142,14 +142,14 @@ if st.button("⬇️ Download diabetes_data_upload.csv"):
 #st.subheader("1) Upload CSV")
 #file = st.file_uploader("Upload your CSV file", type=["csv"])
 
-if file is None:
-    local_dataset = "diabetes_data_upload.csv"
-    if os.path.exists(local_dataset):
-        st.success("Using downloaded GitHub dataset for prediction.")
-        file = open(local_dataset, "rb")
-    else:
-        st.warning("Upload a CSV OR click the download button above.")
-        st.stop()
+
+local_dataset = "diabetes_data_upload.csv"
+if os.path.exists(local_dataset):
+    st.success("Using downloaded GitHub dataset for prediction.")
+    file = open(local_dataset, "rb")
+else:
+    st.warning("Click the download button above.")
+    st.stop()
 
 
 # ---------------------------------------------------------
@@ -251,4 +251,5 @@ if has_label and len(y_true) > 0:
 
 else:
     st.info("Labels not found. Predictions only.")
+
 
