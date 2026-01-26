@@ -108,11 +108,11 @@ except Exception as e:
 
 feature_order = metadata["feature_order"]
 
-with st.expander("📌 Assignment-required metrics table (from local hold-out test)", expanded=True):
+'''with st.expander("📌 Assignment-required metrics table (from local hold-out test)", expanded=True):
     if metrics_df is not None:
         st.dataframe(metrics_df, use_container_width=True)
     else:
-        st.info("metrics.csv not found. Run the training notebook to generate results/metrics.csv")
+        st.info("metrics.csv not found. Run the training notebook to generate results/metrics.csv")'''
 
 
 # ----------------------- UPLOAD CSV -------------------------
@@ -213,5 +213,6 @@ if has_label and len(y_true) > 0:
 
 else:
     st.info("No ground-truth label column `class` found in uploaded CSV. Showing predictions only.")
+
 
 
